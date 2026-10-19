@@ -106,8 +106,9 @@ Texture *TexturePool::GetTexture(string filename)
         }
     }
     //if the texture could not be found, log it as an error
-    char msg[512];
-    sprintf(msg,"Warning in texturePoolGetTextureFromPool(): Could not find texture:%s",filename.c_str());
+    // (std::string rather than sprintf into a fixed buffer - see the WATCH
+    // OUT in Texture::loadTexture for why that matters with long paths.)
+    string msg = "Warning in texturePoolGetTextureFromPool(): Could not find texture:"+filename;
     Logger::Instance()->writeToLog(msg,"runlog.txt");
     //return NULL
     return NULL;

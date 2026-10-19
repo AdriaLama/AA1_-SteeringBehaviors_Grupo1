@@ -57,8 +57,24 @@ void Logger::writeToLog(string message, string filename)
 
     ofstream logfile;
     logfile.open (dirAndFilename, ios::out | ios::app);
-    logfile << message << endl;
-    logfile.close();
 
+    // WATCH OUT: the logs/ directory only exists relative to the *working*
+    // directory. Run the .exe straight out of bin\Debug\ instead of from
+    // the project folder and the open above fails - which used to mean the
+    // one place that explains what went wrong silently wrote nothing. Fall
+    // back to a bare runlog.txt next to wherever we're running, and echo to
+    // the console too, so there is always a trail to follow.
+    if(!logfile.is_open()){
+        logfile.clear();
+        logfile.open (filename, ios::out | ios::app);
+    }
+
+    if(logfile.is_open()){
+        logfile << message << endl;
+        logfile.close();
+    }
+    else{
+        cerr << "LOG: " << message << endl;
+    }
 }
 

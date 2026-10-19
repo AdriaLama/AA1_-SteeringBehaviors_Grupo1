@@ -28,8 +28,12 @@ newer with the **"Desktop development with C++"** workload.
 
 The executable goes to `bin\Debug\` (or `bin\Release\`), with `SDL2.dll` and
 `SDL2_image.dll` copied next to it, and Visual Studio runs it from the project
-folder so `data\` is found. The game opens **fullscreen** — press `Esc` to quit.
-If it closes straight away, look in `logs\runlog.txt` for the reason.
+folder so `data\` is found. The game opens **borderless fullscreen at your
+screen's own resolution** — press `Esc` to quit, `F11` to drop to a window.
+If it closes straight away, or you get a black screen, look in
+`logs\runlog.txt`: it records the display, window size and graphics backend
+before any of the game's own drawing happens. See
+[Troubleshooting](#troubleshooting) below.
 
 (Opening the folder with *File > Open > Folder* also works — it uses
 `CMakeLists.txt` with the same bundled libraries — but then set the debug
@@ -63,6 +67,7 @@ Run from the project root so that assets under `data/` are found.
 | `G` | Toggle the tile grid |
 | `Tab` | Cycle the *selected* agent's weapon (Unarmed → Sword → Bow). In your own AI, a state machine or decision tree could make this choice instead. |
 | `Space` | Play a one-shot attack on the *selected* agent (no-op while unarmed) |
+| `F11` | Toggle borderless fullscreen / windowed |
 | `Esc` | Quit |
 
 The camera starts centred on the first agent and stops scrolling before you
@@ -71,6 +76,50 @@ overlay is on; turn it on (`F1`) to see which agent is selected.
 
 Agents can't walk through obstacles: when they bump into one, they slide along
 its edge.
+
+### Troubleshooting
+
+**First stop: `logs\runlog.txt`.** It is written line by line as the game
+starts, so it survives a crash or a hang. The first few lines report the SDL
+version, the graphics driver, how many displays there are, the display's
+current mode, the window size the game actually got, and which rendering
+backend was chosen — then one line per sprite sheet as it loads.
+
+| Symptom | What it means | What to do |
+|---------|---------------|------------|
+| Black screen, can't close it | The window is up but something is wrong with the display path | **Shift+F5** in Visual Studio (Debug > Stop Debugging) always kills it. Then try `F11`, or start with `--windowed` (below). |
+| Window opens then closes immediately | An init step failed | Read the last line of `logs\runlog.txt` — it names the failure. |
+| Game runs but there are no characters | Sprite sheets didn't load | Check for `WARNING: Texture:... was NOT loaded` lines. Usually the working directory (see next row) or, rarely, not enough graphics memory. |
+| No `logs\runlog.txt` at all, or no art and an empty map | The game is running from the wrong folder | Run it from the project folder, not from inside `bin\Debug\`. The `.sln` sets this up already; `File > Open > Folder` does not. The game now prints this explicitly on startup when it happens. |
+| Very low framerate | No hardware acceleration available | The log says `Render backend:software`. Update the graphics driver; the game still runs. |
+
+**Starting windowed.** Pass `--windowed` (or `-w`) on the command line to boot
+into a 1360×768 window instead of fullscreen. In Visual Studio: *Debug >
+isogame Debug Properties > Debugging > Command Arguments*. `F11` does the same
+thing while the game is running.
+
+**If fullscreen still misbehaves on one particular machine,** these
+environment variables let you test a different graphics path without touching
+the code (set them under *Debug > isogame Debug Properties > Debugging >
+Environment*, as `NAME=VALUE`):
+
+| Variable | Try | Why |
+|----------|-----|-----|
+| `SDL_RENDER_DRIVER` | `opengl`, or `software` | Skips Direct3D, which is where most driver-specific trouble lives |
+| `SDL_WINDOWS_DPI_AWARENESS` | `unaware`, `system`, `permonitorv2` | Overrides how the game handles Windows display scaling (it asks for `permonitorv2` by default) |
+
+If one of those fixes it, say which machine and which setting — that's the
+useful bug report.
+
+**Why this mattered.** Earlier versions asked the monitor to switch to a
+1360×768 video mode (SDL's "real" exclusive fullscreen). Lots of laptop
+panels, classroom monitors and projectors don't have that mode, and when the
+driver accepted the switch anyway you got a black screen — and because the
+window never received keyboard focus, `Esc` never reached the game and it
+couldn't be closed. The game now opens a borderless window at whatever
+resolution the display is already running, so there is no mode switch to fail.
+`WINDOW_WIDTH`/`WINDOW_HEIGHT` in `core/renderer.hpp` are set at runtime from
+the real window size — read them, don't assume 1360×768.
 
 ### Maps
 

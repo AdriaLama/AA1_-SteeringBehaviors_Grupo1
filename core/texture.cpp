@@ -31,12 +31,16 @@ Texture::~Texture()
 
 int Texture::loadTexture(string filename)
 {
-    char msg[200];
-
+    // WATCH OUT: these messages are built with std::string, not sprintf into
+    // a fixed char buffer. A sprite-sheet path plus an SDL error message runs
+    // to ~270 characters, which overflowed the 200-byte buffer this function
+    // used to use - so the one code path that reports a failed texture load
+    // corrupted the stack instead, turning a clear log line into a crash
+    // exactly when something was already wrong.
     SDL_Surface *tmpSurface = IMG_Load(filename.c_str());
 
     if(tmpSurface == NULL){
-        sprintf(msg,"Error in loadTexture(): Could not load image:%s! SDL_image Error:%s\n",filename.c_str(),IMG_GetError());
+        string msg = "Error in loadTexture(): Could not load image:"+filename+"! SDL_image Error:"+string(IMG_GetError());
         Logger::Instance()->writeToLog(msg,"runlog.txt");
         return 0;
     }
@@ -44,7 +48,10 @@ int Texture::loadTexture(string filename)
         texture = SDL_CreateTextureFromSurface(Renderer::Instance()->getRenderer(),tmpSurface);
 
         if(texture == NULL){
-            sprintf(msg,"Error in loadTexture(): Could not load image:%s! SDL_image Error:%s\n",filename.c_str(),IMG_GetError());
+            // SDL_GetError, not IMG_GetError: it's SDL_CreateTextureFromSurface
+            // that failed here, which is what you hit when the graphics card
+            // runs out of memory part-way through loading.
+            string msg = "Error in loadTexture(): Could not create texture for:"+filename+"! SDL Error:"+string(SDL_GetError());
             Logger::Instance()->writeToLog(msg,"runlog.txt");
             SDL_FreeSurface(tmpSurface);
             return 0;

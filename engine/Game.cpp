@@ -209,25 +209,11 @@ void Game::init(int mapWidthTiles, int mapHeightTiles, int tileSize)
     tilesetTex_ = texturePool_.GetTexture("isotiles.png");
     isoMapLoadTileSet(iso_->isoMap, tilesetTex_, 64, 80);
 
-    // Character sprite sheets: Idle + WalkForward (+ Attack where it exists),
-    // Body + Shadow, all 16 facing directions, for every weapon variant so
-    // cycleWeapon() can switch at runtime without loading on demand
-    // (data/x180p_Spritesheets/<Set>_<Weapon>/<Set>_<Weapon>_<Layer>_<angle>.png).
-    for (Weapon w : { Weapon::Unarmed, Weapon::Sword, Weapon::Bow }) {
-        std::vector<std::string> sets = { std::string("Idle_") + weaponSuffix(w),
-                                           std::string("WalkForward_") + weaponSuffix(w) };
-        if (weaponHasAttack(w)) {
-            sets.push_back(std::string("Attack_") + weaponSuffix(w));
-        }
-        for (const std::string &set : sets) {
-            std::string dir = "data/x180p_Spritesheets/" + set + "/";
-            for (int d = 0; d < kNumDirections; ++d) {
-                std::string angle = angleSuffix(d);
-                texturePool_.AddTexture(dir + set + "_Body_"   + angle + ".png");
-                texturePool_.AddTexture(dir + set + "_Shadow_" + angle + ".png");
-            }
-        }
-    }
+    // Character sprite sheets for the weapon agents start with. The other
+    // weapons' sheets load the first time something asks for them (Tab, or a
+    // new agent) - see ensureWeaponTextures, and the WATCH OUT on its
+    // declaration in Game.hpp for why they aren't all loaded here.
+    ensureWeaponTextures(Weapon::Unarmed);
 
     // Tall billboard object sprite (trees).
     texturePool_.AddTexture("data/isotree.png");
@@ -255,6 +241,89 @@ Game::~Game()
     }
 }
 
+void Game::showLoadingScreen(const std::string &what, float progress)
+{
+    SDL_Renderer *r = Renderer::Instance()->getRenderer();
+
+    // Pump the event queue. Without this, Windows sees a program that hasn't
+    // touched its message queue in seconds, greys the window out and labels
+    // it "Not responding" - which is exactly what a slow asset load used to
+    // look like: a black window that ignored Esc and couldn't be closed.
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_QUIT) {
+            running_ = false;   // run() then returns immediately
+        }
+        else if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+                 event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+            running_ = false;
+        }
+    }
+
+    SDL_SetRenderDrawColor(r, 0x1e, 0x1e, 0x1e, 0xFF);
+    SDL_RenderClear(r);
+
+    // A bar across the middle of whatever size the window turned out to be.
+    float clamped = std::max(0.0f, std::min(progress, 1.0f));
+    int barW = (int)(WINDOW_WIDTH * 0.5f);
+    int barH = 18;
+    int barX = (WINDOW_WIDTH - barW) / 2;
+    int barY = (WINDOW_HEIGHT - barH) / 2;
+
+    SDL_Rect frame = { barX - 2, barY - 2, barW + 4, barH + 4 };
+    SDL_SetRenderDrawColor(r, 0x6B, 0x7C, 0x5E, 0xFF);
+    SDL_RenderDrawRect(r, &frame);
+
+    SDL_Rect fill = { barX, barY, (int)(barW * clamped), barH };
+    SDL_SetRenderDrawColor(r, 0x8F, 0xB3, 0x6E, 0xFF);
+    SDL_RenderFillRect(r, &fill);
+
+    SDL_RenderPresent(r);
+
+    (void)what;   // label is for the log line in ensureWeaponTextures
+}
+
+void Game::ensureWeaponTextures(Weapon weapon)
+{
+    // Already loaded? Nothing to do - this is called on every animator
+    // rebuild, not just the first one.
+    for (Weapon loaded : loadedWeapons_) {
+        if (loaded == weapon) {
+            return;
+        }
+    }
+    loadedWeapons_.push_back(weapon);
+
+    // Idle + WalkForward (+ Attack where the weapon has one), Body + Shadow,
+    // all 16 facing directions:
+    // data/x180p_Spritesheets/<Set>_<Weapon>/<Set>_<Weapon>_<Layer>_<angle>.png
+    std::vector<std::string> sets = { std::string("Idle_") + weaponSuffix(weapon),
+                                      std::string("WalkForward_") + weaponSuffix(weapon) };
+    if (weaponHasAttack(weapon)) {
+        sets.push_back(std::string("Attack_") + weaponSuffix(weapon));
+    }
+
+    std::string label = std::string("Loading ") + weaponSuffix(weapon) + " sprites";
+    Logger::Instance()->writeToLog(label + "...", "runlog.txt");
+
+    int total = (int)sets.size() * kNumDirections * 2;
+    int done  = 0;
+    for (const std::string &set : sets) {
+        std::string dir = "data/x180p_Spritesheets/" + set + "/";
+        for (int d = 0; d < kNumDirections; ++d) {
+            std::string angle = angleSuffix(d);
+            texturePool_.AddTexture(dir + set + "_Body_"   + angle + ".png");
+            texturePool_.AddTexture(dir + set + "_Shadow_" + angle + ".png");
+            done += 2;
+            // Every 8th sheet: redraw the bar and let the OS see us alive.
+            // Not every sheet - with vsync on, each present costs a frame.
+            if (done % 8 == 0) {
+                showLoadingScreen(label, (float)done / (float)total);
+            }
+        }
+    }
+}
+
 Animator Game::makeCharacterAnimator(Weapon weapon)
 {
     // Build a walk + idle + (if the weapon has one) attack animation for each
@@ -264,6 +333,10 @@ Animator Game::makeCharacterAnimator(Weapon weapon)
     // EXTEND: Death/Jump/Run/Draw/Hit/Strafe/WalkBack - add more sets here
     // once the engine has a reason to play them, then select them in
     // updateAnimations (below) the same way "walk"/"idle"/"attack" are.
+    // The sheets this animator is about to look up may not be in the pool
+    // yet (only the starting weapon's are preloaded) - pull them in first.
+    ensureWeaponTextures(weapon);
+
     Animator anim;
     std::string idleSet   = std::string("Idle_")        + weaponSuffix(weapon);
     std::string walkSet   = std::string("WalkForward_") + weaponSuffix(weapon);
@@ -545,8 +618,25 @@ void Game::processInput()
         if (event.type == SDL_QUIT) {
             running_ = false;
         }
-        else if (event.type == SDL_KEYUP && event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+        else if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+                 event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+            // Deliberately both halves of the keypress: quitting shouldn't
+            // depend on the window happening to hold focus for the whole of
+            // it. (Alt+F4 and the window's close box arrive as SDL_QUIT.)
             running_ = false;
+        }
+        else if (event.type == SDL_KEYUP && event.key.keysym.scancode == SDL_SCANCODE_F11) {
+            // Escape hatch: if fullscreen looks wrong on this machine's
+            // screen, drop to a window (and back) without rebuilding. Start
+            // the program with --windowed to boot straight into windowed.
+            Renderer::Instance()->toggleFullscreen();
+        }
+        else if (event.type == SDL_WINDOWEVENT &&
+                 (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED ||
+                  event.window.event == SDL_WINDOWEVENT_RESIZED)) {
+            // WINDOW_WIDTH/HEIGHT are the screen size the camera maths uses,
+            // so they have to follow the window - see renderer.hpp.
+            Renderer::Instance()->refreshWindowSize();
         }
         else if (event.type == SDL_KEYUP &&
                  (event.key.keysym.scancode == SDL_SCANCODE_F1 || event.key.keysym.scancode == SDL_SCANCODE_I)) {

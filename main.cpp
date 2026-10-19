@@ -10,6 +10,9 @@
 #include "engine/Game.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
+#include <string>
 
 // 128: pixel width of a ground tile's iso diamond on screen (halved
 // internally to a 64-unit world tile - see Game::init's WATCH OUT comment).
@@ -75,20 +78,53 @@ void nudgeOffBlockedTile(const World &world, int &tileX, int &tileY)
     }
 }
 
+// True if the program was started with --windowed (or -w): boot into a
+// 1360x768 window instead of borderless fullscreen. This is the fallback for
+// a machine whose graphics driver or display setup misbehaves fullscreen -
+// F11 toggles the same thing while running.
+bool wantsWindowed(int argc, char *argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--windowed") == 0 || std::strcmp(argv[i], "-w") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Checks that we're being run from the project folder, where data/ and logs/
+// live. Launching the .exe from inside bin\Debug\ instead gives a game with
+// no art and no map, which is confusing to debug from the symptoms alone, so
+// say so plainly in the log and on the console instead.
+void warnIfAssetsMissing(const std::string &mapPath)
+{
+    FILE *f = fopen(mapPath.c_str(), "r");
+    if (f != NULL) {
+        fclose(f);
+        return;
+    }
+    std::string msg = "ERROR: cannot find '" + mapPath + "' from the current working directory. "
+                      "Run the game from the project folder (the one holding data/ and logs/), "
+                      "not from bin/Debug. In Visual Studio this is the Debugging > Working "
+                      "Directory setting, already set to the project folder in IsoGame.vcxproj.";
+    Logger::Instance()->writeToLog(msg, "runlog.txt");
+    fprintf(stderr, "%s\n", msg.c_str());
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
 {
-    (void)argc;
-    (void)argv;
-
     Logger::Instance()->setLoggerDirectory("logs");
     Logger::Instance()->deleteLog("runlog.txt");
 
-    initSDL((char *)"IsoEngine - AI Sandbox");
+    const char *kMapPath = "data/maps/demo.map";
+    warnIfAssetsMissing(kMapPath);
+
+    initSDL((char *)"IsoEngine - AI Sandbox", !wantsWindowed(argc, argv));
 
     // Build the runtime from a data-driven map (size + trees/blocks) ...
-    Game game("data/maps/demo.map", TILE_SIZE);
+    Game game(kMapPath, TILE_SIZE);
 
     // ... place a few agents near the middle of the map, close enough
     // together to demo Left/Right agent-cycling at a glance - Click sets

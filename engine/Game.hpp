@@ -20,8 +20,9 @@
 //     game.run();
 
 // EXTEND: new weapon variant - add it here, then to weaponSuffix() in
-// Game.cpp (maps it to the sprite pack's filename suffix) and the preload
-// loop in Game::init. Purely cosmetic (selects which sheets Animator
+// Game.cpp (maps it to the sprite pack's filename suffix). Nothing else
+// needs touching: ensureWeaponTextures() loads a weapon's sheets the first
+// time one is actually used. Purely cosmetic (selects which sheets Animator
 // plays) - a student's FSM/decision-maker eventually drives this instead
 // of a key (see cycleWeapon below).
 enum class Weapon { Unarmed, Sword, Bow };
@@ -83,6 +84,19 @@ private:
     void     ensureAgentVisuals();
     Animator makeCharacterAnimator(Weapon weapon);
     void     updateAnimations(float dt);
+    // Summary: load one weapon's sprite sheets into the texture pool, once.
+    // Called by makeCharacterAnimator, so switching weapon (Tab) or adding an
+    // agent pulls in whatever art it needs by itself.
+    // WATCH OUT: loading every weapon up front was ~700 MB of GPU texture
+    // memory before the first frame ever appeared - slow enough on a weak
+    // integrated GPU to look like a hang, and an outright failure on a
+    // machine short of memory. One weapon at a time is ~1/3 of that.
+    void     ensureWeaponTextures(Weapon weapon);
+    // Summary: draw a progress bar and pump the event queue mid-load, so the
+    // window is visible and responsive (and Esc/Alt+F4 work) while the sprite
+    // sheets stream in instead of showing a black "Not responding" window.
+    // Inputs: what - short label for the log; progress - 0..1.
+    void     showLoadingScreen(const std::string &what, float progress);
 
     // TAB: cycle the selected agent's weapon (rebuilds its Animator against
     // the new weapon's sheets). SPACE: play a one-shot attack on the
@@ -106,6 +120,7 @@ private:
     std::vector<int>      facing_;        // last facing per agent (0..15)
     std::vector<Weapon>   weapons_;       // current weapon per agent
     std::vector<bool>     attacking_;     // mid one-shot attack per agent
+    std::vector<Weapon>   loadedWeapons_; // whose sheets ensureWeaponTextures has loaded
     Texture     *treeTex_    = nullptr;
     Texture     *tilesetTex_  = nullptr;   // isotiles.png, for tile-set object sprites
     bool         running_ = true;
