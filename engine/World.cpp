@@ -38,7 +38,7 @@ Vector2 World::tileCenter(int tileX, int tileY) const
     return Vector2((tileX + 0.5f) * tileSize, (tileY + 0.5f) * tileSize);
 }
 
-void World::worldToTile(const Vector2 &p, int &tileX, int &tileY) const
+void World::worldToTile(const Vector2& p, int& tileX, int& tileY) const
 {
     // WATCH OUT: (int) truncates toward zero, not floor - see World.hpp.
     tileX = (tileSize > 0) ? (int)(p.x / tileSize) : 0;
@@ -62,7 +62,27 @@ void World::addObject(ObjectType type, int tileX, int tileY, int tileIndex)
 
 void World::update(float dt)
 {
-    for (Agent &agent : agents) {
-        agent.update(dt, *this);
+    // Agents without their own behaviour get the shared army one. Built once,
+    // on first use, so it picks up the tileSize the map was loaded with.
+    if (!armyReady_ && tileSize > 0) {
+        armySteering_ = ArmySteering::make((float)tileSize);
+        armyReady_ = true;
+    }
+    if (armyReady_) {
+        for (Agent& agent : agents) {
+            if (!agent.steering) {
+                armySteering_.applyTo(agent);
+            }
+        }
+    }
+
+    // Pass 1: every agent decides from the same snapshot. Pass 2: all move.
+    forces_.resize(agents.size());
+    for (size_t i = 0; i < agents.size(); ++i) {
+        agents[i].selectSteering();
+        forces_[i] = agents[i].computeSteering(*this);
+    }
+    for (size_t i = 0; i < agents.size(); ++i) {
+        agents[i].integrate(dt, *this, forces_[i]);
     }
 }

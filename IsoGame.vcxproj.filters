@@ -63,6 +63,8 @@
     <ClCompile Include="engine\World.cpp">
       <Filter>Source Files\engine</Filter>
     </ClCompile>
+    <ClCompile Include="Flocking.cpp" />
+    <ClCompile Include="SteeringBehaviors.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\deltatimer.hpp">
@@ -113,6 +115,8 @@
     <ClInclude Include="engine\WorldObject.hpp">
       <Filter>Source Files\engine</Filter>
     </ClInclude>
+    <ClInclude Include="Flocking.h" />
+    <ClInclude Include="SteeringBehaviors.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="data\maps\demo.map">

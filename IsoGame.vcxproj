@@ -87,6 +87,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Flocking.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="core\deltatimer.cpp" />
     <ClCompile Include="core\initclose.cpp" />
@@ -102,6 +103,7 @@
     <ClCompile Include="engine\Game.cpp" />
     <ClCompile Include="engine\MapLoader.cpp" />
     <ClCompile Include="engine\World.cpp" />
+    <ClCompile Include="SteeringBehaviors.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="core\deltatimer.hpp" />
@@ -110,6 +112,7 @@
     <ClInclude Include="core\renderer.hpp" />
     <ClInclude Include="core\texture.hpp" />
     <ClInclude Include="core\texture_pool.hpp" />
+    <ClInclude Include="Flocking.h" />
     <ClInclude Include="iso\isoEngine.hpp" />
     <ClInclude Include="iso\isoMap.hpp" />
     <ClInclude Include="engine\Agent.hpp" />
@@ -120,6 +123,7 @@
     <ClInclude Include="engine\Vector2.hpp" />
     <ClInclude Include="engine\World.hpp" />
     <ClInclude Include="engine\WorldObject.hpp" />
+    <ClInclude Include="SteeringBehaviors.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="data\maps\demo.map" />

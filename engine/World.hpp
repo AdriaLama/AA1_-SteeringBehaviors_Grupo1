@@ -5,6 +5,7 @@
 #include "Vector2.hpp"
 #include "Agent.hpp"
 #include "WorldObject.hpp"
+#include "Flocking.h"
 
 // FILE: the AI-facing tile grid + agent list - what students' AI code reads.
 // FITS IN: pure data + queries, no SDL/rendering. Each agent keeps its own
@@ -20,9 +21,9 @@ class World
 public:
     World(int widthTiles = 0, int heightTiles = 0, int tileSize = 0);
 
-    int widthTiles  = 0;
+    int widthTiles = 0;
     int heightTiles = 0;
-    int tileSize    = 0;
+    int tileSize = 0;
 
     std::vector<Agent>       agents;
     std::vector<WorldObject> objects;
@@ -46,10 +47,16 @@ public:
     // WATCH OUT: casts to int, which truncates toward zero, not floor - a
     // negative world position (e.g. just off the map's top/left edge) does
     // NOT round down to tile -1 the way you might expect; see World.cpp.
-    void    worldToTile(const Vector2 &p, int &tileX, int &tileY) const;
+    void    worldToTile(const Vector2& p, int& tileX, int& tileY) const;
 
     // --- Simulation -----------------------------------------------------
-    void update(float dt);   // advances every agent
+    // Summary: advance every agent by dt seconds. Agents with no steering
+    // behaviour of their own get the shared army one (Flocking.hpp).
+    // WATCH OUT: two passes - first every agent's steering is computed from the
+    // SAME snapshot of the world, then all are integrated - so an agent never
+    // sees a neighbour that has already moved this frame (flocking reads
+    // neighbours' position/velocity), and the vector order doesn't bias it.
+    void update(float dt);
 
 private:
     std::vector<uint8_t> blocked_;    // 1 = blocked, size widthTiles * heightTiles
@@ -57,6 +64,10 @@ private:
     // inBounds()/isWalkable() first (see World.cpp), or this indexes outside
     // blocked_'s storage.
     int index(int tileX, int tileY) const { return tileY * widthTiles + tileX; }
+
+    ArmySteering         armySteering_;     // shared by every agent without its own behaviour
+    bool                 armyReady_ = false;
+    std::vector<Vector2> forces_;           // scratch for update(), one per agent
 };
 
 #endif // ENGINE_WORLD_HPP
